@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 import subprocess
 from Benchmarks import GEMMCublasLt as gemm
 from Benchmarks import HBMBandwidth as HBM
@@ -13,6 +14,12 @@ from Benchmarks import LLMBenchmark as llmb
 machine_name = ""
 current = os.getcwd()
 tools.create_dir("Outputs")
+LOGLEVEL = os.environ.get('LOGLEVEL', 'INFO').upper()
+logging.basicConfig(filename="Outputs/runner.log",
+                    filemode='w',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=LOGLEVEL)
 
 
 def get_system_specs():

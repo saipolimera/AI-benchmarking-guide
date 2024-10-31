@@ -7,6 +7,7 @@ import pandas as pd
 import csv
 from prettytable import PrettyTable
 import json
+import logging
 
 class LLMBenchmark:
     def __init__(self, config_path: str, dir_path: str, machine: str):
@@ -18,6 +19,7 @@ class LLMBenchmark:
         self.precision = "float16"
         self.container = None
         self.machine = machine
+        self.ct_log = logging.getLogger(self.name + "::docker.exec_run")
 
     def get_config(self, path: str):
         file = open(path)
@@ -27,6 +29,12 @@ class LLMBenchmark:
             return data[self.name]
         except KeyError:
             raise KeyError("no value found")
+
+    def exec(self, cmd, **kwargs):
+        self.ct_log.info(f"exec_run: start cmd={shlex.join(shlex.split(cmd))}, {kwargs}")
+        ret = self.container.exec_run(cmd)
+        self.ct_log.info(f"exec_run: exit_code:{ret.exit_code}, output:{ret.output.decode()}")
+        return ret
 
     def create_container(self):
         client = docker.from_env()
@@ -54,11 +62,12 @@ class LLMBenchmark:
         # Install Necessary Libraries and Repositories
         self.install_requirements()
 
+
         # # Create required Folders
         if not os.path.exists(f'{self.dir_path}/models'):
-            self.container.exec_run(f"mkdir {self.dir_path}/models")
+            self.ct_exec(f"mkdir {self.dir_path}/models")
         if not os.path.exists(f'{self.dir_path}/checkpoints'):
-            self.container.exec_run(f"mkdir {self.dir_path}/checkpoints")
+            self.ct_exec(f"mkdir {self.dir_path}/checkpoints")
 
     def cleanup_container(self):
         if self.container:
@@ -66,29 +75,29 @@ class LLMBenchmark:
 
     def install_requirements(self):
         # Update package lists first
-        i1 = self.container.exec_run("apt-get update", stderr=True)
+        i1 = self.ct_exec("apt-get update", stderr=True)
         if i1.exit_code != 0:
             print(i1.output.decode('utf-8'))
 
         # Install required packages
         print("Installing Required Packages")
-        i2 = self.container.exec_run("apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev git", stderr=True)
+        i2 = self.ct_exec("apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev git", stderr=True)
         if i2.exit_code != 0:
             print(i2.output.decode('utf-8'))
 
         # Install tensorrt-llm package
-        i3 = self.container.exec_run("pip3 install tensorrt_llm -U --pre --extra-index-url https://pypi.nvidia.com ")
+        i3 = self.ct_exec("pip3 install tensorrt_llm -U --pre --extra-index-url https://pypi.nvidia.com ")
         if i3.exit_code != 0:
             print(i3.output.decode('utf-8'))
 
-        i4 = self.container.exec_run("pip3 install --upgrade transformers")
+        i4 = self.ct_exec("pip3 install --upgrade transformers")
         if i4.exit_code != 0:
             print(i4.output.decode('utf-8'))
         print("Cloning TensorRT-LLM reopsitory from https://github.com/NVIDIA/TensorRT-LLM.git") # Add a tag
 
         # Clone TensorRT-LLM repo
         if not os.path.exists(os.path.join(self.dir_path, 'TensorRT-LLM')):
-            i4 = self.container.exec_run(f'/bin/sh -c "cd {self.dir_path} && git clone https://github.com/NVIDIA/TensorRT-LLM.git"' , stderr=True)
+            i4 = self.ct_exec(f'/bin/sh -c "cd {self.dir_path} && git clone https://github.com/NVIDIA/TensorRT-LLM.git"' , stderr=True)
             if i4.exit_code != 0:
                 print(i4.output.decode('utf-8'))
             else:
@@ -96,17 +105,17 @@ class LLMBenchmark:
 
         else:
             print("TensorRT-LLM already exists")
-        i6 = self.container.exec_run(f'/bin/sh -c "cd {self.dir_path}/TensorRT-LLM && git checkout a681853d3803ee5893307e812530b5e7004bb6e1"')
+        i6 = self.ct_exec(f'/bin/sh -c "cd {self.dir_path}/TensorRT-LLM && git checkout a681853d3803ee5893307e812530b5e7004bb6e1"')
 
 
 
     def download_models(self):
         # Install git-lfs
-        dm1 = self.container.exec_run("apt-get install git-lfs")
+        dm1 = self.ct_exec("apt-get install git-lfs")
         if dm1.exit_code != 0:
             print(dm1.output.decode('utf-8'))
 
-        dm2 = self.container.exec_run("git lfs install")
+        dm2 = self.ct_exec("git lfs install")
         if dm2.exit_code != 0:
             print(dm2.output.decode('utf-8'))
 
@@ -116,7 +125,7 @@ class LLMBenchmark:
                 model_url = self.config['models'][model_name]['hf_url']
 
                 # Install Model Requirements
-                dm3 = self.container.exec_run(f'pip install -r {self.dir_path}/TensorRT-LLM/examples/{model_type}/requirements.txt ')
+                dm3 = self.ct_exec(f'pip install -r {self.dir_path}/TensorRT-LLM/examples/{model_type}/requirements.txt ')
                 if dm3.exit_code != 0:
                     print(dm3.output.decode('utf-8'))
 
@@ -124,7 +133,7 @@ class LLMBenchmark:
                 print("Downloading", model_name)
                 if not os.path.exists(os.path.join(self.dir_path, 'models', model_name)):
                     new_url = model_url.replace("https://", '')
-                    self.container.exec_run(f'/bin/sh -c "cd {self.dir_path}/models && git clone https://{self.hf_username}:{self.hf_password}@{new_url}"')
+                    self.ct_exec(f'/bin/sh -c "cd {self.dir_path}/models && git clone https://{self.hf_username}:{self.hf_password}@{new_url}"')
                     print(model_name, "downloaded successfully")
                 else: # Add Error handling
                     print(model_name, 'already exists')
@@ -181,7 +190,7 @@ class LLMBenchmark:
                                     --pp_size 1
                                 '''
 
-                        be1 = self.container.exec_run(convert_checkpoints_command)
+                        be1 = self.ct_exec(convert_checkpoints_command)
                         if be1.exit_code != 0:
                             print(be1.output.decode('utf-8'))
 
@@ -207,12 +216,12 @@ class LLMBenchmark:
                                 --workers 8
                             '''
 
-                        be2 = self.container.exec_run(build_engine_command)
+                        be2 = self.ct_exec(build_engine_command)
                         if be2.exit_code != 0:
                             print(be2.output.decode('utf-8'))
 
         # Delete Converted Checkpoints
-        be3 = self.container.exec_run(f'''rm -rf {self.dir_path}/checkpoints''')
+        be3 = self.ct_exec(f'''rm -rf {self.dir_path}/checkpoints''')
         if be3.exit_code != 0:
                 print(be3.output.decode('utf-8'))
 
@@ -268,8 +277,8 @@ class LLMBenchmark:
                                 cwd=self.dir_path
                             )
 
-                            # c14_e = self.container.exec_run(c14)
-                            rb1 = self.container.exec_run(run_benchmark_command)
+                            # c14_e = self.ct_exec(c14)
+                            rb1 = self.ct_execy(run_benchmark_command)
                             if rb1.exit_code != 0:
                                 print(rb1.output.decode('utf-8'))
                             # print(rb1.output.decode('utf-8'))

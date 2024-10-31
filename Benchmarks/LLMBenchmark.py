@@ -149,12 +149,23 @@ class LLMBenchmark:
 
                         # Build Engines
                         print(f"Building Engine for {model_name} , TP size:{tp_size}")
+                        # From https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-overview.md#engine-building
+                        # https://techcommunity.microsoft.com/t5/azure-high-performance-computing/optimizing-language-model-inference-on-azure/ba-p/4248271
+                        # --max_seq_len = (max_input + max_output) in our case it is 1024 + 128
+                        # From
+                        # https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/llama#long-context-evaluation
+                        # https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-best-practices.md
+                        # --max_num_tokens = (max_batch_size * max_input_len), in our case it is 1024*1024 => 1M
                         if "405" not in model_name:
                             build_engine_command = f'''
                                 trtllm-build \
                                 --checkpoint_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                 --output_dir {self.dir_path}/engines/{model_name}/tp_{tp_size}/{self.precision} \
                                 --workers {tp_size} \
+                                --max_batch_size 1024 \
+                                --max_num_tokens 1048576 \
+                                --max_input_len  1048576 \
+                                --max_seq_len    1152 \
                                 --gemm_plugin auto
                             '''
                         else:
@@ -162,9 +173,10 @@ class LLMBenchmark:
                                 trtllm-build \
                                 --checkpoint_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                 --output_dir {self.dir_path}/engines/{model_name}/tp_{tp_size}/{self.precision} \
-                                --max_num_tokens 8192 \
-                                --max_input_len 133000 \
-                                --max_seq_len  133000\
+                                --max_batch_size 256 \
+                                --max_num_tokens 262144 \
+                                --max_input_len  262144 \
+                                --max_seq_len    1152 \
                                 --use_paged_context_fmha enable \
                                 --workers 8
                             '''

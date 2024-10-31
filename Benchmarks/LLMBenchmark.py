@@ -240,7 +240,8 @@ class LLMBenchmark:
                                 '''
                             else:
                                 run_benchmark_command = f'''
-                                    mpirun -n {tp_size} --allow-run-as-root python3 {self.dir_path}/TensorRT-LLM/benchmarks/python/benchmark.py \
+                                    mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root \
+                                                python3 {self.dir_path}/TensorRT-LLM/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
                                                 --dtype float16
                                                 --input_output_len {input_output_size} \

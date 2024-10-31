@@ -27,11 +27,11 @@ class LLMBenchmark:
             return data[self.name]
         except KeyError:
             raise KeyError("no value found")
-    
+
     def create_container(self):
         client = docker.from_env()
 
-        
+
         # Define the Docker run options
         docker_run_options = {
             'runtime': 'nvidia',
@@ -57,14 +57,14 @@ class LLMBenchmark:
             self.container.exec_run(f"mkdir {self.dir_path}/models")
         if not os.path.exists(f'{self.dir_path}/checkpoints'):
             self.container.exec_run(f"mkdir {self.dir_path}/checkpoints")
-        
-    
+
+
     def install_requirements(self):
         # Update package lists first
         i1 = self.container.exec_run("apt-get update", stderr=True)
         if i1.exit_code != 0:
             print(i1.output.decode('utf-8'))
-        
+
         # Install required packages
         print("Installing Required Packages")
         i2 = self.container.exec_run("apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev git", stderr=True)
@@ -80,7 +80,7 @@ class LLMBenchmark:
         if i4.exit_code != 0:
             print(i4.output.decode('utf-8'))
         print("Cloning TensorRT-LLM reopsitory from https://github.com/NVIDIA/TensorRT-LLM.git") # Add a tag
-        
+
         # Clone TensorRT-LLM repo
         if not os.path.exists(os.path.join(self.dir_path, 'TensorRT-LLM')):
             i4 = self.container.exec_run(f'/bin/sh -c "cd {self.dir_path} && git clone https://github.com/NVIDIA/TensorRT-LLM.git"' , stderr=True)
@@ -93,14 +93,14 @@ class LLMBenchmark:
             print("TensorRT-LLM already exists")
         i6 = self.container.exec_run(f'/bin/sh -c "cd {self.dir_path}/TensorRT-LLM && git checkout a681853d3803ee5893307e812530b5e7004bb6e1"')
 
-            
+
 
     def download_models(self):
         # Install git-lfs
         dm1 = self.container.exec_run("apt-get install git-lfs")
         if dm1.exit_code != 0:
             print(dm1.output.decode('utf-8'))
-            
+
         dm2 = self.container.exec_run("git lfs install")
         if dm2.exit_code != 0:
             print(dm2.output.decode('utf-8'))
@@ -123,7 +123,7 @@ class LLMBenchmark:
                     print(model_name, "downloaded successfully")
                 else: # Add Error handling
                     print(model_name, 'already exists')
-    
+
 
     def build_engines(self):
         for model_name in self.config['models']:
@@ -134,7 +134,7 @@ class LLMBenchmark:
                     # Convert Checkpoints
 
                     if not os.path.exists(f'{self.dir_path}/engines/{model_name}/tp_{tp_size}/{self.precision}/rank0.engine'):
-                        print(f"Converting Checkpoints for {model_name}, TP size:{tp_size}") 
+                        print(f"Converting Checkpoints for {model_name}, TP size:{tp_size}")
                         if tp_size == 1:
                             if model_precision == "fp8":
                                 convert_checkpoints_command = f'''
@@ -199,7 +199,7 @@ class LLMBenchmark:
                                 --max_input_len 133000 \
                                 --max_seq_len  133000\
                                 --use_paged_context_fmha enable \
-                                --workers 8 
+                                --workers 8
                             '''
 
                         be2 = self.container.exec_run(build_engine_command)
@@ -222,7 +222,7 @@ class LLMBenchmark:
                             print(f"Benchmarking {model_name} | TP Size: {tp_size} | Batch Size: {batch_size} | Input Size: {input_output_size.split(',')[0]} | Output Size: {input_output_size.split(',')[1]}")
 
                             if tp_size == 1:
-                                
+
                                 print(model_name, tp_size, batch_size, input_output_size)
                                 run_benchmark_command = f'''
                                     python3 {self.dir_path}/TensorRT-LLM/benchmarks/python/benchmark.py \
@@ -261,13 +261,13 @@ class LLMBenchmark:
                                 start_new_session=True,
                                 cwd=self.dir_path
                             )
-                        
+
                             # c14_e = self.container.exec_run(c14)
                             rb1 = self.container.exec_run(run_benchmark_command)
                             if rb1.exit_code != 0:
                                 print(rb1.output.decode('utf-8'))
                             # print(rb1.output.decode('utf-8'))
-                            
+
                             cmd = "pkill -9 nvidia-smi"
                             cmd = shlex.split(cmd)
 
@@ -290,7 +290,7 @@ class LLMBenchmark:
 
                             table2 = PrettyTable()
 
-                            table2.field_names = ['Metrics', 'Maximum', 'Average'] 
+                            table2.field_names = ['Metrics', 'Maximum', 'Average']
                             table2.add_row(['Memory Usage', df['max_memory_usage'][-1], df['avg_memory_usage'][-1]])
                             table2.add_row(['Power Draw', df['max_power_usage'][-1], df['avg_power_usage'][-1]])
                             table2.add_row(['Clock Speed', df['max_clock_speed'][-1], df['avg_clock_speed'][-1]])
@@ -299,7 +299,7 @@ class LLMBenchmark:
 
                             # self.run_model_sizes(model_name, batch_size)
 
-    
+
     def parse_results(self,output: str, model_name: str):
         n_readings = len(output.split('[BENCHMARK]'))
         readings = output.split('[BENCHMARK]')
@@ -313,14 +313,14 @@ class LLMBenchmark:
                 result = result.strip().replace('dec', model_name).split()
                 # print(result)
                 for i in range(0,len(result),2):
-                    
+
                     if result[i] not in df:
                         df[result[i]] = []
                     # print(df[result[i]])
                     df[result[i]].append(result[i+1])
                 if 'machine' not in df:
                     df['machine'] = []
-                
+
 
                 df['machine'].append(self.machine)
                 telemetry = self.get_telemetry(model_name)
@@ -398,7 +398,7 @@ class LLMBenchmark:
     def run_model_sizes(self, model_name, batch_size):
 
         # if not os.path.isfile(f'Outputs/{model_name}_GEMMCublasLt_Performance_' + self.machine + '_'  + '_'+self.precision+'.csv'):
-            
+
             model_config_path = f'{self.dir_path}/models/{model_name}/config.json'
             with open(model_config_path, 'r') as file:
                 model_config = json.load(file)
@@ -409,11 +409,11 @@ class LLMBenchmark:
             m_dims = [batch_size, batch_size, batch_size, batch_size]
             n_dims = [hidden_dim, kv_dim, intermediate_dim, hidden_dim]
             k_dims = [hidden_dim,  hidden_dim, hidden_dim, intermediate_dim]
-            b_dims = [1, 1, 1, 1]  
+            b_dims = [1, 1, 1, 1]
             os.chdir(f"{self.dir_path}/bin")
-            
+
             buffer = []
-            
+
             for i in range(len(m_dims)):
                 # change i, b and w
                 results = subprocess.run(
@@ -440,14 +440,14 @@ class LLMBenchmark:
                 log = results.stdout.decode('utf-8').split()
                 buffer.append(log)
             operation_name = [["Attention: Query Projection"]+buffer[0], ["Attention: Key Projection"]+buffer[1], ["Attention: Value Projection"]+buffer[1], ["Feed Forward: Up projection 1"]+buffer[2], ["Feed Forward: Up projection 2"]+buffer[2], ["Feed Forward: Down Projection"]+buffer[3]]
-            
+
 
             with open(f'{self.dir_path}/Outputs/{model_name}_GEMMCublasLt_Performance_' + self.machine + '_'  + '_'+self.precision+'.csv', 'a') as csvFile:
                 writer = csv.writer(csvFile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 writer.writerow(["Operation", "M", "N", "K", "Batch", "Time(us)", "TFLOPS"])
                 for item in operation_name:
                     writer.writerow(item)
-            
+
             table = PrettyTable()
 
             table.field_names = ["Operation", "M", "N", "K", "Batch", "Time(us)", "TFLOPS"]

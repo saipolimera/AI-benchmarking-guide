@@ -185,8 +185,12 @@ class LLMBenchmark:
                 for tp_size in self.config['models'][model_name]['tp_sizes']:
                     for batch_size in self.config['models'][model_name]['batch_sizes']:
                         for input_output_size in  self.config['models'][model_name]['input_output_sizes']:
+                            model_precision = self.config['models'][model_name]['precision']
                             warmup = self.config['models'][model_name]['warmup']
                             number_of_runs = self.config['models'][model_name]['number_of_runs']
+                            if model_precision == "fp8":
+                                model_precision = "float16"
+
                             print(f"Benchmarking {model_name} | TP Size: {tp_size} | Batch Size: {batch_size} | Input Size: {input_output_size.split(',')[0]} | Output Size: {input_output_size.split(',')[1]}")
 
                             if tp_size == 1:
@@ -207,7 +211,7 @@ class LLMBenchmark:
                                     mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root 
                                                 pipenv run python3 /workspace/TensorRT-LLM/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
-                                                --dtype float16
+                                                --dtype {model_precision}
                                                 --input_output_len {input_output_size} \
                                                 --warm_up {warmup} \
                                                 --num_runs {number_of_runs} \

@@ -34,7 +34,16 @@ To assess how different system components (as tested by the microbenchmarks) aff
 
 ### Requirements
 All the requirements for the benchmarks can be intalled with a simple command: `bash install_requirements.sh`. This will install the Python PIP, NCCL, and Docker packages needed. 
+#### Build LLMBench container
+```
+#Build image from scratch
+make -C Benchmarks/TensorRT-LLM-img fetch build
+# Create image's tar archive, will be saved to Benchmark/tensorrt-llm-12.4.0-devel-ubuntu22.04.tar.zst
+make -C Benchmarks/TensorRT-LLM-img fetch build tar-img
+# Load container image from saved archive
+zstdcat tensorrt-llm-12.4.0-devel-ubuntu22.04.tar.zst | docker load
 
+```
 ### Runs
 The Azure AI Benchmarking Guide runs all the benchmarks described above with the command: `python3 runner.py`. The file [`config.json`](https://github.com/Azure/AI-benchmarking-guide/blob/main/config.json) contains the specific settings for the benchmarks.
 To run specific microbenchmarks, see  [`runner.py`](https://github.com/Azure/AI-benchmarking-guide/blob/02d2875b8051d357bd5a871bee6fb7104b631908/runner.py#L104) and comment out the tests you are not interested in running. The [`models`](https://github.com/Azure/AI-benchmarking-guide/blob/02d2875b8051d357bd5a871bee6fb7104b631908/config.json#L52) field in `config.json` contains all the end-to-end models that can be benchmarked. To run benchmark for a specific model, set `use_model: true`. They are all set to `false` by default.

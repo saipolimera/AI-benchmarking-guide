@@ -30,11 +30,15 @@ class LLMBenchmark:
         except KeyError:
             raise KeyError("no value found")
 
-    def exec(self, cmd, **kwargs):
+    def ct_exec(self, cmd, **kwargs):
         self.ct_log.info(f"exec_run: start cmd={shlex.join(shlex.split(cmd))}, {kwargs}")
-        ret = self.container.exec_run(cmd)
+        ret = self.container.exec_run(cmd, **kwargs)
         self.ct_log.info(f"exec_run: exit_code:{ret.exit_code}, output:{ret.output.decode()}")
         return ret
+
+    def ct_exec_model(self, cmd, model, **kwargs):
+        self.ct_exec('pwd', workdir=f'/workspace/TensorRT-LLM/env/{model}')
+        return self.ct_exec('pipenv run ' + cmd, workdir=f'/workspace/TensorRT-LLM/env/{model}', **kwargs)
 
     def create_container(self):
         client = docker.from_env()
@@ -55,13 +59,9 @@ class LLMBenchmark:
         # self.container = client.containers.get('c34fc0616f7a')
 
         # Creates new Docker container
-        self.container = client.containers.run('nvidia/cuda:12.1.0-devel-ubuntu22.04', **docker_run_options)
+        self.container = client.containers.run('tensorrt-llm:12.4.0-devel-ubuntu22.04', **docker_run_options)
 
         print(f"Docker Container ID: {self.container.id}")
-
-        # Install Necessary Libraries and Repositories
-        self.install_requirements()
-
 
         # # Create required Folders
         if not os.path.exists(f'{self.dir_path}/models'):
@@ -73,62 +73,15 @@ class LLMBenchmark:
         if self.container:
             self.container.stop()
 
-    def install_requirements(self):
-        # Update package lists first
-        i1 = self.ct_exec("apt-get update", stderr=True)
-        if i1.exit_code != 0:
-            print(i1.output.decode('utf-8'))
-
-        # Install required packages
-        print("Installing Required Packages")
-        i2 = self.ct_exec("apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev git", stderr=True)
-        if i2.exit_code != 0:
-            print(i2.output.decode('utf-8'))
-
-        # Install tensorrt-llm package
-        i3 = self.ct_exec("pip3 install tensorrt_llm -U --pre --extra-index-url https://pypi.nvidia.com ")
-        if i3.exit_code != 0:
-            print(i3.output.decode('utf-8'))
-
-        i4 = self.ct_exec("pip3 install --upgrade transformers")
-        if i4.exit_code != 0:
-            print(i4.output.decode('utf-8'))
-        print("Cloning TensorRT-LLM reopsitory from https://github.com/NVIDIA/TensorRT-LLM.git") # Add a tag
-
-        # Clone TensorRT-LLM repo
-        if not os.path.exists(os.path.join(self.dir_path, 'TensorRT-LLM')):
-            i4 = self.ct_exec(f'/bin/sh -c "cd {self.dir_path} && git clone https://github.com/NVIDIA/TensorRT-LLM.git"' , stderr=True)
-            if i4.exit_code != 0:
-                print(i4.output.decode('utf-8'))
-            else:
-                print('TensorRT-LLM Cloned')
-
-        else:
-            print("TensorRT-LLM already exists")
-        i6 = self.ct_exec(f'/bin/sh -c "cd {self.dir_path}/TensorRT-LLM && git checkout a681853d3803ee5893307e812530b5e7004bb6e1"')
-
-
 
     def download_models(self):
-        # Install git-lfs
-        dm1 = self.ct_exec("apt-get install git-lfs")
-        if dm1.exit_code != 0:
-            print(dm1.output.decode('utf-8'))
-
-        dm2 = self.ct_exec("git lfs install")
-        if dm2.exit_code != 0:
-            print(dm2.output.decode('utf-8'))
-
         for model_name in self.config['models']:
             if self.config['models'][model_name]['use_model']:
                 model_type = self.config['models'][model_name]['type']
                 model_url = self.config['models'][model_name]['hf_url']
 
-                # Install Model Requirements
-                dm3 = self.ct_exec(f'pip install -r {self.dir_path}/TensorRT-LLM/examples/{model_type}/requirements.txt ')
-                if dm3.exit_code != 0:
-                    print(dm3.output.decode('utf-8'))
-
+                # Check that container has model speciffic environment
+                self.ct_exec_model('python3 -c "import torch; print(torch.__version__)"', model_type)
                 # Clone required models.
                 print("Downloading", model_name)
                 if not os.path.exists(os.path.join(self.dir_path, 'models', model_name)):
@@ -152,7 +105,7 @@ class LLMBenchmark:
                         if tp_size == 1:
                             if model_precision == "fp8":
                                 convert_checkpoints_command = f'''
-                                python3 {self.dir_path}/TensorRT-LLM/examples/quantization/quantize.py \
+                                python3 /workspace/TensorRT-LLM/examples/quantization/quantize.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --qformat fp8 \
                                     --kv_cache_dtype fp8 \
@@ -161,7 +114,7 @@ class LLMBenchmark:
                                 '''
                             else:
                                 convert_checkpoints_command = f'''
-                                python3 {self.dir_path}/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
+                                python3 /workspace/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --output_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                     --dtype float16 \
@@ -170,7 +123,7 @@ class LLMBenchmark:
                         else:
                             if model_precision == "fp8":
                                 convert_checkpoints_command = f'''
-                                python3 {self.dir_path}/TensorRT-LLM/examples/quantization/quantize.py \
+                                python3 /workspace/TensorRT-LLM/examples/quantization/quantize.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --qformat fp8 \
                                     --kv_cache_dtype fp8 \
@@ -180,7 +133,7 @@ class LLMBenchmark:
                                 '''
                             else:
                                 convert_checkpoints_command = f'''
-                                python3 {self.dir_path}/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
+                                python3 /workspace/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --output_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                     --dtype {model_precision} \
@@ -190,7 +143,7 @@ class LLMBenchmark:
                                     --pp_size 1
                                 '''
 
-                        be1 = self.ct_exec(convert_checkpoints_command)
+                        be1 = self.ct_exec_model(convert_checkpoints_command, model_type)
                         if be1.exit_code != 0:
                             print(be1.output.decode('utf-8'))
 
@@ -216,7 +169,7 @@ class LLMBenchmark:
                                 --workers 8
                             '''
 
-                        be2 = self.ct_exec(build_engine_command)
+                        be2 = self.ct_exec_model(build_engine_command, model_type)
                         if be2.exit_code != 0:
                             print(be2.output.decode('utf-8'))
 
@@ -227,6 +180,7 @@ class LLMBenchmark:
 
     def run_benchmark(self):
         for model_name in self.config['models']:
+            model_type = self.config['models'][model_name]['type']
             if self.config['models'][model_name]['use_model']:
                 for tp_size in self.config['models'][model_name]['tp_sizes']:
                     for batch_size in self.config['models'][model_name]['batch_sizes']:
@@ -239,7 +193,7 @@ class LLMBenchmark:
 
                                 print(model_name, tp_size, batch_size, input_output_size)
                                 run_benchmark_command = f'''
-                                    python3 {self.dir_path}/TensorRT-LLM/benchmarks/python/benchmark.py \
+                                    python3 /workspace/TensorRT-LLM/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
                                                 --input_output_len {input_output_size} \
                                                 --warm_up {warmup} \
@@ -248,9 +202,10 @@ class LLMBenchmark:
                                                 -m dec
                                 '''
                             else:
+                                # Note we need to explicitly prepend "pipenv run" because virtualenv is not inherented by mpirun
                                 run_benchmark_command = f'''
-                                    mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root \
-                                                python3 {self.dir_path}/TensorRT-LLM/benchmarks/python/benchmark.py \
+                                    mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root 
+                                                pipenv run python3 /workspace/TensorRT-LLM/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
                                                 --dtype float16
                                                 --input_output_len {input_output_size} \
@@ -278,7 +233,7 @@ class LLMBenchmark:
                             )
 
                             # c14_e = self.ct_exec(c14)
-                            rb1 = self.ct_execy(run_benchmark_command)
+                            rb1 = self.ct_exec_model(run_benchmark_command, model_type)
                             if rb1.exit_code != 0:
                                 print(rb1.output.decode('utf-8'))
                             # print(rb1.output.decode('utf-8'))

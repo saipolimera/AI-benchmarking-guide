@@ -14,7 +14,7 @@ pip3 install --no-cache-dir flash-attn
 pip3 install --no-cache-dir docker
 pip3 install --no-cache-dir prettytable
 
-sudo apt install fio
+sudo apt install -y fio zstd
 
 sleep 4
 

@@ -98,6 +98,7 @@ def run_LLMBenchmark():
     test.download_models()
     test.build_engines()
     test.run_benchmark()
+    test.cleanup_container()
 
 machine_name = get_system_specs()
 

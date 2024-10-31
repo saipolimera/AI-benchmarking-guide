@@ -34,11 +34,13 @@ class LLMBenchmark:
 
         # Define the Docker run options
         docker_run_options = {
+            'name': 'llm-benchmark',
             'runtime': 'nvidia',
             'volumes': {str(self.dir_path): {'bind': str(self.dir_path), 'mode': 'rw'}},
             'entrypoint': '/bin/bash',
             'tty': True,
-            'detach': True
+            'detach': True,
+            'auto_remove': True
         }
 
         #if existing container exists
@@ -58,6 +60,9 @@ class LLMBenchmark:
         if not os.path.exists(f'{self.dir_path}/checkpoints'):
             self.container.exec_run(f"mkdir {self.dir_path}/checkpoints")
 
+    def cleanup_container(self):
+        if self.container:
+            self.container.stop()
 
     def install_requirements(self):
         # Update package lists first

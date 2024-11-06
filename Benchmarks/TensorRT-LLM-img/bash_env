@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# We just want bash profile to initialize LD_LIBRARY_PATH
+$@

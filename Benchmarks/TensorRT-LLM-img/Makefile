@@ -1,7 +1,7 @@
-IMAGE_BASE_NAME ?= cuda
-IMAGE_NAME ?= tensorrt-llm
-IMAGE_BASE_REPO=nvidia/
-IMAGE_BASE_TAG  ?= 12.4.0-devel-ubuntu22.04
+IMAGE_BASE_NAME ?= release
+IMAGE_NAME ?= tensorrt_llm_benchmark
+IMAGE_BASE_REPO= tensorrt_llm/
+IMAGE_BASE_TAG  ?= latest
 MODEL_LIST ?= "llama"
 TAG =${IMAGE_BASE_TAG}
 

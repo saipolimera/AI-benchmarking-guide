@@ -38,8 +38,8 @@ class LLMBenchmark:
         return ret
 
     def ct_exec_model(self, cmd, model, **kwargs):
-        self.ct_exec('pwd', workdir=f'/workspace/TensorRT-LLM/env/{model}')
-        return self.ct_exec('pipenv run ' + cmd, workdir=f'/workspace/TensorRT-LLM/env/{model}', **kwargs)
+        assert model == 'llama', 'FIXME, currently only llama model family is supported'
+        return self.ct_exec(cmd, **kwargs)
 
     def create_container(self):
         client = docker.from_env()
@@ -60,7 +60,7 @@ class LLMBenchmark:
         # self.container = client.containers.get('c34fc0616f7a')
 
         # Creates new Docker container
-        self.container = client.containers.run('tensorrt-llm:12.4.0-devel-ubuntu22.04', **docker_run_options)
+        self.container = client.containers.run('tensorrt_llm_benchmark:latest', **docker_run_options)
 
         print(f"Docker Container ID: {self.container.id}")
 
@@ -82,7 +82,8 @@ class LLMBenchmark:
                 model_url = self.config['models'][model_name]['hf_url']
 
                 # Check that container has model speciffic environment
-                self.ct_exec_model('python3 -c "import torch; print(torch.__version__)"', model_type)
+                self.ct_exec_model('bash_env python3 -c "import torch; print(torch.__version__)"', model_type)
+                self.ct_exec_model('bash_env python3 -c "import tensorrt_llm"', model_type)
                 # Clone required models.
                 print("Downloading", model_name)
                 if not os.path.exists(os.path.join(self.dir_path, 'models', model_name)):
@@ -106,7 +107,7 @@ class LLMBenchmark:
                         if tp_size == 1:
                             if model_precision == "fp8":
                                 convert_checkpoints_command = f'''
-                                python3 /workspace/TensorRT-LLM/examples/quantization/quantize.py \
+                                bash_env python3 /app/tensorrt_llm/examples/quantization/quantize.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --qformat fp8 \
                                     --kv_cache_dtype fp8 \
@@ -115,7 +116,7 @@ class LLMBenchmark:
                                 '''
                             else:
                                 convert_checkpoints_command = f'''
-                                python3 /workspace/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
+                                bash_env python3 /app/tensorrt_llm/examples/{model_type}/convert_checkpoint.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --output_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                     --dtype float16 \
@@ -124,7 +125,7 @@ class LLMBenchmark:
                         else:
                             if model_precision == "fp8":
                                 convert_checkpoints_command = f'''
-                                python3 /workspace/TensorRT-LLM/examples/quantization/quantize.py \
+                                bash_env python3 /app/tensorrt_llm/examples/quantization/quantize.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --qformat fp8 \
                                     --kv_cache_dtype fp8 \
@@ -134,7 +135,7 @@ class LLMBenchmark:
                                 '''
                             else:
                                 convert_checkpoints_command = f'''
-                                python3 /workspace/TensorRT-LLM/examples/{model_type}/convert_checkpoint.py \
+                                bash_env python3 /app/tensorrt_llm/examples/{model_type}/convert_checkpoint.py \
                                     --model_dir {self.dir_path}/models/{model_name}\
                                     --output_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                     --dtype {model_precision} \
@@ -159,7 +160,7 @@ class LLMBenchmark:
                         # --max_num_tokens = (max_batch_size * max_input_len), in our case it is 1024*1024 => 1M
                         if "405" not in model_name:
                             build_engine_command = f'''
-                                trtllm-build \
+                                bash_env trtllm-build \
                                 --checkpoint_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                 --output_dir {self.dir_path}/engines/{model_name}/tp_{tp_size}/{self.precision} \
                                 --workers {tp_size} \
@@ -171,7 +172,7 @@ class LLMBenchmark:
                             '''
                         else:
                             build_engine_command = f'''
-                                trtllm-build \
+                                bash_env trtllm-build \
                                 --checkpoint_dir {self.dir_path}/checkpoints/{model_name}/tp_{tp_size}/{self.precision}\
                                 --output_dir {self.dir_path}/engines/{model_name}/tp_{tp_size}/{self.precision} \
                                 --max_batch_size 256 \
@@ -210,7 +211,7 @@ class LLMBenchmark:
 
                                 print(model_name, tp_size, batch_size, input_output_size)
                                 run_benchmark_command = f'''
-                                    python3 /workspace/TensorRT-LLM/benchmarks/python/benchmark.py \
+                                    bash_env python3 /app/tensorrt_llm/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
                                                 --input_output_len {input_output_size} \
                                                 --warm_up {warmup} \
@@ -219,10 +220,9 @@ class LLMBenchmark:
                                                 -m dec
                                 '''
                             else:
-                                # Note we need to explicitly prepend "pipenv run" because virtualenv is not inherented by mpirun
                                 run_benchmark_command = f'''
-                                    mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root 
-                                                pipenv run python3 /workspace/TensorRT-LLM/benchmarks/python/benchmark.py \
+                                    bash_env mpirun -n {tp_size} --bind-to none -display-map --allow-run-as-root 
+                                                bash_env python3 /app/tensorrt_llm/benchmarks/python/benchmark.py \
                                                 --batch_size {batch_size} \
                                                 --dtype {model_precision}
                                                 --input_output_len {input_output_size} \

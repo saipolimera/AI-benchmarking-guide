@@ -232,36 +232,11 @@ class LLMBenchmark:
                                                 -m dec
                                 '''
 
-                            cmd = (
-                                    f"nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used,memory.total,"
-                                    + f"power.draw,enforced.power.limit,clocks.current.sm,"
-                                    + f"clocks.current.memory --format=csv --id=0 -lms 100 -f {self.dir_path}/Outputs/{model_name}_power.csv"
-                                )
-
-
-                            cmd = shlex.split(cmd)
-
-                            power_results = subprocess.Popen(
-                                cmd,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                                start_new_session=True,
-                                cwd=self.dir_path
-                            )
-
                             # c14_e = self.ct_exec(c14)
                             rb1 = self.ct_exec_model(run_benchmark_command, model_type)
                             if rb1.exit_code != 0:
                                 print(rb1.output.decode('utf-8'))
-                            # print(rb1.output.decode('utf-8'))
-
-                            cmd = "pkill -9 nvidia-smi"
-                            cmd = shlex.split(cmd)
-
-                            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.dir_path)
-                            power_results.communicate()
                             result = rb1.output.decode('utf-8')
-
 
                             df = self.parse_results(result, model_name)
                             table1 = PrettyTable()
@@ -274,15 +249,6 @@ class LLMBenchmark:
                             table1.add_row(['Latency (ms)', df['latency(ms)'][-1]])
 
                             print(table1.get_string(header=False))
-
-                            table2 = PrettyTable()
-
-                            table2.field_names = ['Metrics', 'Maximum', 'Average']
-                            table2.add_row(['Memory Usage', df['max_memory_usage'][-1], df['avg_memory_usage'][-1]])
-                            table2.add_row(['Power Draw', df['max_power_usage'][-1], df['avg_power_usage'][-1]])
-                            table2.add_row(['Clock Speed', df['max_clock_speed'][-1], df['avg_clock_speed'][-1]])
-
-                            print(table2)
 
                             # self.run_model_sizes(model_name, batch_size)
 
@@ -310,11 +276,6 @@ class LLMBenchmark:
                 if 'machine' not in df:
                     df['machine'] = []
                 df['machine'].append(self.machine)
-                telemetry = self.get_telemetry(model_name)
-                for param in telemetry:
-                    if param not in df:
-                        df[param] = []
-                    df[param].append(telemetry[param])
                 self.log.info(f"parse_results: update df {df}")
                 pd.DataFrame(df).to_csv(os.path.join(self.dir_path, 'Outputs', f"LLMBenchmark_{self.machine}.csv"), index = False)
                 return df

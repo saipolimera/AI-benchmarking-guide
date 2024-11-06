@@ -1,0 +1,12 @@
+cmake
+packaging
+torch
+matplotlib
+scipy
+pandas
+numpy
+ninja
+torchvision
+#flash-attn # Not required for LLMBench
+docker
+prettytable

@@ -1,0 +1,78 @@
+{
+    "GEMMCublasLt": {
+        "inputs": {
+            "m": {
+                "start": 16,
+                "end": 4096,
+                "interval": 16
+            },
+            "n": {
+                "start": 16,
+                "end": 4096,
+                "interval": 16
+            },
+            "k": {
+                "start": 16,
+                "end": 4096,
+                "interval": 16
+            },
+            "duration": 120,
+            "datatype": "fp8e4m3"
+        }
+    },
+
+    "NCCLBandwidth": {
+        "inputs": {
+            "start": "8",
+            "end": "8G",
+            "num_gpus": 8
+        }
+    },
+
+    "HBMBandwidth": {
+        "inputs": {
+            "interval": 10,
+            "num_runs": 10
+        }
+    },
+
+    "NVBandwidth": {
+        "inputs": {
+            "num_runs": 1,
+            "interval": 5
+        }
+    },
+
+    "LLMBenchmark": {
+        "credentials": {
+            "hf_username" : "",
+            "hf_password" : ""
+        },
+
+        "models": {
+            "Mistral-7B-v0.1":{
+                "use_model": true,
+                "hf_url": "https://huggingface.co/mistralai/Mistral-7B-v0.1",
+                "type": "llama",
+                "batch_sizes": [400, 500, 512, 600, 700],
+                "input_output_sizes": ["1024,128"],
+                "tp_sizes": [4],
+                "warmup": 10,
+                "number_of_runs": 5,
+                "precision": "fp8"
+            },
+
+            "Meta-Llama-3-8B":{
+                "use_model": true,
+                "hf_url": "https://huggingface.co/meta-llama/Meta-Llama-3-8B",
+                "type": "llama",
+                "batch_sizes": [400, 500, 512, 600, 700],
+                "input_output_sizes": ["1024,128"],
+                "tp_sizes": [4],
+                "warmup": 10,
+                "number_of_runs": 5,
+                "precision": "fp8"
+            }
+        }
+    }
+}

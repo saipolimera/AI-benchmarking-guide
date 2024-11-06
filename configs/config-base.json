@@ -51,7 +51,7 @@
 
         "models": {
             "Mistral-7B-v0.1":{
-                "use_model": false,
+                "use_model": true,
                 "hf_url": "https://huggingface.co/mistralai/Mistral-7B-v0.1",
                 "type": "llama",
                 "batch_sizes": [32,64],

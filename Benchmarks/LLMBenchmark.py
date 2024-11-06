@@ -19,6 +19,7 @@ class LLMBenchmark:
         self.precision = "float16"
         self.container = None
         self.machine = machine
+        self.log = logging.getLogger(self.name)
         self.ct_log = logging.getLogger(self.name + "::docker.exec_run")
 
     def get_config(self, path: str):
@@ -287,34 +288,34 @@ class LLMBenchmark:
 
 
     def parse_results(self,output: str, model_name: str):
-        n_readings = len(output.split('[BENCHMARK]'))
-        readings = output.split('[BENCHMARK]')
+        lines=output.split('\n')
         if not os.path.exists(os.path.join(self.dir_path, 'Outputs', f"LLMBenchmark_{self.machine}.csv")):
             df = dict()
         else:
             df = pd.read_csv(os.path.join(self.dir_path, 'Outputs', f"LLMBenchmark_{self.machine}.csv")).to_dict(orient='list')
-        for i in range(n_readings):
-            if 'model_name' in readings[i]:
-                result = readings[i].split('[TensorRT-LLM]')[0]
-                result = result.strip().replace('dec', model_name).split()
-                # print(result)
+        self.log.info(f"parse_results: current df {df}")
+        for line in lines:
+            self.log.info(f"parse walk line: {line}")
+            if line.startswith("[BENCHMARK] "):
+                result = line.split()[1:]
                 for i in range(0,len(result),2):
-
-                    if result[i] not in df:
-                        df[result[i]] = []
-                    # print(df[result[i]])
-                    df[result[i]].append(result[i+1])
+                    key=result[i]
+                    val=result[i+1]
+                    if key in ['model_name', 'engine_dir']:
+                        key = 'model_name'
+                        val = model_name
+                    if key not in df:
+                        df[key] = []
+                    df[key].append(val)
                 if 'machine' not in df:
                     df['machine'] = []
-
-
                 df['machine'].append(self.machine)
                 telemetry = self.get_telemetry(model_name)
                 for param in telemetry:
                     if param not in df:
                         df[param] = []
                     df[param].append(telemetry[param])
-                # print(df)
+                self.log.info(f"parse_results: update df {df}")
                 pd.DataFrame(df).to_csv(os.path.join(self.dir_path, 'Outputs', f"LLMBenchmark_{self.machine}.csv"), index = False)
                 return df
 

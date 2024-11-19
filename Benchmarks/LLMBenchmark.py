@@ -40,8 +40,8 @@ class LLMBenchmark:
     def ct_exec_model(self, cmd, model, **kwargs):
         #assert model == 'llama', 'FIXME, currently only llama model family is supported'
         #return self.ct_exec(cmd, **kwargs)
-        self.ct_exec('pwd', workdir=f'/workspace/TensorRT-LLM/env/{model}')
-        return self.ct_exec('pipenv run ' + cmd, workdir=f'/workspace/TensorRT-LLM/env/{model}', **kwargs)
+        self.ct_exec('pwd', workdir=f'/app/tensorrt_llm/env/{model}')
+        return self.ct_exec('pipenv run ' + cmd, workdir=f'/app/tensorrt_llm/env/{model}', **kwargs)
 
     def create_container(self):
         client = docker.from_env()

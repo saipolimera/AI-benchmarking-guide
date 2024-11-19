@@ -107,7 +107,7 @@ def run_LLMBenchmark():
     test.run_benchmark()
     test.cleanup_container()
 
-machine_name = get_system_specs()
+#machine_name = get_system_specs()
 
 # Tests (comment out the ones you don't want to run)
 #run_CublasLt()
